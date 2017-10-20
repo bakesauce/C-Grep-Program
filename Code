@@ -1,0 +1,270 @@
+//Mark Baker – Grep Project Source Code
+//8/8/2017
+//CIS 361 Summer 2017
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <argp.h>
+#include <dirent.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <dirent.h>
+#include <unistd.h>
+#include <time.h>
+
+//Function Prototypes
+void defaultCommand(const char* pattern, FILE * f);
+int linesMatched(const char* pattern, FILE *f);
+void linesIgnoreCase(const char* pattern, FILE *f);
+void lineNumOfMatch(const char* pattern, FILE *f);
+void linesNotMatched(const char* pattern, FILE *f);
+void matchWholeLine(const char* pattern, FILE *f);
+void matchWholeWord(const char* pattern, FILE *f);
+void directoryMatch(const char* pattern, char* file);
+
+int main(int argc, char* argv[]) {
+    //Instance Variables
+    char* command;
+    const char* pattern;
+    char* filename;
+    FILE *fPtr;
+
+    //Input Validation - checking if number of arguments is correct for the grep program
+        //less than three is not valid
+        if (argc < 3) {
+            puts("Not a valid entry.");
+        //three is valid, calls default pattern method if file is valid
+        } else if (argc == 3) {
+            pattern = argv[1];
+            filename = argv[2];
+            fPtr = fopen (filename, "r");
+            if ((fPtr) == NULL ) {
+                perror("fopen");
+            } else {
+                defaultCommand(pattern, fPtr);
+            }
+        //more than three inputs indicate a command was given. Checks what the command was and runs the appropriate method if filename
+        //is valid
+        } else {
+            command = argv[1];
+            pattern = argv[2];
+            filename = argv[3];
+            fPtr = fopen (filename, "r");
+            if ((fPtr) == NULL ) {
+                perror("fopen");
+            } else {
+                if (strcmp(command, "-c") == 0) {
+                    printf("%d\n", linesMatched(pattern, fPtr));
+                } else if (strcmp(command, "-i") == 0) {
+                    linesIgnoreCase(pattern, fPtr);
+                } else if (strcmp(command, "-l") == 0) {
+                    directoryMatch(pattern, filename);
+                } else if (strcmp(command, "-n") == 0) {
+                    lineNumOfMatch(pattern, fPtr);
+                } else if (strcmp(command, "-v") == 0) {
+                    linesNotMatched(pattern, fPtr);
+                } else if (strcmp(command, "-x") == 0) {
+                    matchWholeLine(pattern, fPtr);
+                } else if (strcmp(command, "-w") == 0) {
+                    matchWholeWord(pattern, fPtr);
+                } else {
+                    puts("Command not recognized.");
+                }
+            }
+        }
+}
+
+/*!
+Default Command method. Searches the file for the pattern. If found, prints the line.
+
+@param pattern
+@param FILE
+**/
+void defaultCommand(const char* pattern, FILE * f) {
+    char buff[256];
+    char *searchPtr;
+
+    while (fgets(buff, sizeof buff, f) != NULL) {
+        searchPtr = strstr(&buff, pattern);
+        if (searchPtr) {
+            puts(buff);
+        }
+    }
+    fclose(f);
+}
+
+/*!
+Number of lines matched method. Searches the file for the pattern. If found, prints the number of lines the pattern occurs on.
+
+@param pattern
+@param FILE
+**/
+int linesMatched(const char* pattern, FILE *f){
+    char buff[256];
+    int counter = 0;
+    char *searchPtr;
+
+    while (fgets(buff, sizeof buff, f) != NULL) {
+        searchPtr = strstr(&buff, pattern);
+        if (searchPtr) {
+            ++counter;
+        }
+    }
+    fclose(f);
+    return counter;
+}
+
+/*!
+Ignore case method. Converts every line in the file and the patter to lowercase. Checks if there are any matches, if there are it prints
+the original line.
+
+@param pattern
+@param FILE
+**/
+void linesIgnoreCase(const char* pattern, FILE *f){
+    char buff[256];
+    char temp[256];
+    char tempPat[strlen(pattern)];
+    char *searchPtr;
+
+    while (fgets(buff, sizeof buff, f) != NULL) {
+        int i = 0;
+        for (i; i <= strlen(temp); i++){
+            temp[i] = tolower(buff[i]);
+        }
+        i = 0;
+        for (i; i <= strlen(pattern); i++) {
+            tempPat[i] = tolower(pattern[i]);
+        }
+
+        searchPtr = strstr(&temp, tempPat);
+        if (searchPtr) {
+            printf("%s\n", buff);
+        }
+    }
+    fclose(f);
+}
+
+/**
+Line number match method. Searches the file for the pattern. If found, prints the line number and the line.
+**/
+void lineNumOfMatch(const char* pattern, FILE *f){
+    char buff[256];
+    int lineNum = 0;
+    char *searchPtr;
+
+    while (fgets(buff, sizeof buff, f) != NULL) {
+        lineNum++;
+        searchPtr = strstr(&buff, pattern);
+        if (searchPtr) {
+            printf("%d:%s", lineNum, buff);
+        }
+    }
+    fclose(f);
+}
+
+/*!
+Reverse search. Searches the file for the pattern. If not found, prints the line.
+
+@param pattern
+@param FILE
+**/
+void linesNotMatched(const char* pattern, FILE *f) {
+    char buff[256];
+    char *searchPtr;
+
+    while (fgets(buff, sizeof buff, f) != NULL) {
+        searchPtr = strstr(&buff, pattern);
+        if (!searchPtr) {
+            puts(buff);
+        }
+    }
+    fclose(f);
+}
+
+/*!
+Whole line match method. Searches the file for the pattern. If the entire line matches the pattern, prints the line.
+
+@param pattern
+@param FILE
+**/
+void matchWholeLine(const char* pattern, FILE *f) {
+    char buff[256];
+    const char *searchPtr;
+
+    while (fgets(buff, sizeof buff, f) != NULL) {
+        searchPtr = strstr(&buff, pattern);
+        if (searchPtr && (*searchPtr == buff[0]) && (buff[strlen(pattern)] == '\n')){
+            puts(buff);
+        }
+    }
+    fclose(f);
+}
+
+/*!
+Whole word match method. Searches the file for the pattern. Will print line if the pattern found is a 'whole word', or surrounded by non alpha-
+numeric digits or and _.
+
+@param pattern
+@param FILE
+**/
+void matchWholeWord(const char* pattern, FILE *f) {
+    char buff[256];
+    const char *searchPtr;
+    int index;
+
+    while (fgets(buff, sizeof buff, f) != NULL) {
+        searchPtr = strstr(&buff, pattern);
+        index = (int)(searchPtr - buff);
+        if ( (!searchPtr) || ( (searchPtr) && ( (isalnum(buff[index-1]) ) || (buff[index - 1]) == '_' ) ||
+                              ( (isalnum(buff[index+strlen(pattern)] ) ) || (buff[index + strlen(pattern)]) == '_' ) ) ){
+
+        } else {
+            puts(buff);
+        }
+
+    }
+    fclose(f);
+}
+
+/*!
+Directory search method. Searches all files in a directory for the pattern. If found, prints the file it was found in.
+
+@param pattern
+@param file
+**/
+void directoryMatch(const char* pattern, char* file) {
+
+    DIR* d = opendir(file);
+    struct dirent* currententry;
+
+    while((currententry=readdir(d))!=NULL){
+        struct stat buf;
+        char filename[1024];
+        strcpy(filename,file);
+        filename[strlen(filename)+1]='\0';
+        filename[strlen(filename)]='/';
+        strcat(filename,currententry->d_name);
+
+        FILE *fPtr = fopen(filename, "r");
+
+        if ((fPtr) == NULL ) {
+                perror("fopen");
+        } else {
+            char buff[256];
+            int counter = 0;
+            char *searchPtr;
+
+            while (fgets(buff, sizeof buff, fPtr) != NULL) {
+                searchPtr = strstr(&buff, pattern);
+                if (searchPtr) {
+                    printf("%s \n", filename);
+                    break;
+                }
+            }
+        }
+
+    fclose(fPtr);
+  }
+}
